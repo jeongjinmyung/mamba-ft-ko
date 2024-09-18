@@ -1,0 +1,11 @@
+causal-conv1d
+mamba-ssm
+numpy
+torch
+transformers
+accelerate
+datasets
+bitsandbytes
+peft
+safetensors
+wandb
