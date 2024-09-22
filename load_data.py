@@ -1,64 +1,61 @@
 import os
+import time
 from datasets import load_dataset, load_from_disk
 
 
 def preprocess(args, tokenizer, accelerator=None):
-    # Set dataset path.
+    # 데이터셋 경로 설정
     dataset_name = args.dataset_name
-    tokenized_train_data_path = (
-        f"./preprocessed/{dataset_name}/tokenized_train_datasets"
-    )
-    tokenized_test_data_path = f"./preprocessed/{dataset_name}/tokenized_test_datasets"
+    data_path = f"./preprocessed/{dataset_name}/data"
+    tokenized_train_data_path = f"./preprocessed/{dataset_name}/tokenized_train_datasets"
 
-    # If datasets exist, load them.
-    if os.path.exists(tokenized_train_data_path) and os.path.exists(
-        tokenized_test_data_path
-    ):
+    # 데이터셋이 이미 존재하면 불러옴
+    if os.path.exists(tokenized_train_data_path):
         accelerator.print("Loading preprocessed data")
         tokenized_train_datasets = load_from_disk(tokenized_train_data_path)
-        tokenized_test_datasets = load_from_disk(tokenized_test_data_path)
+        
+        return tokenized_train_datasets
 
-        return tokenized_train_datasets, tokenized_test_datasets
-
-    # Download the dataset.
+    # hub에서 데이터셋 다운로드. dict 형태로 불러와짐
     if accelerator.is_local_main_process:
         accelerator.print(f"Loading dataset: {dataset_name}")
         raw_datasets = load_dataset(dataset_name)
-        raw_datasets = raw_datasets["train"].train_test_split(
-            test_size=args.test_split_percentage, shuffle=True
-        )
+        
+        raw_datasets.save_to_disk(data_path)
+        accelerator.print("Dataset downloaded and saved.")
+    else:
+        while not os.path.exists(data_path):
+            time.sleep(1)
+        raw_datasets = load_dataset(data_path)
 
     accelerator.wait_for_everyone()
 
-    # Tokenize the datasets.
+    # 데이터셋 토크나이징
     def tokenize_function(example):
         tokenized_example = tokenizer(
             example[args.dataset_text_field],
             truncation=True,
             padding=False,
             max_length=args.context_len,
-        )
-        return {"input_ids": tokenized_example["input_ids"]}
+        ) 
+        return {
+            "input_ids": tokenized_example["input_ids"]
+        }
 
     if accelerator.is_local_main_process:
-        tokenized_train_datasets = raw_datasets["train"].map(
+        tokenized_train_datasets = raw_datasets['train'].map(
             tokenize_function,
             batched=True,
-            remove_columns=raw_datasets["train"].column_names,
+            remove_columns=raw_datasets['train'].column_names,
             num_proc=os.cpu_count(),
             desc="Running tokenizer on train dataset",
         )
         tokenized_train_datasets.save_to_disk(tokenized_train_data_path)
-
-        tokenized_test_datasets = raw_datasets["test"].map(
-            tokenize_function,
-            batched=True,
-            remove_columns=raw_datasets["test"].column_names,
-            num_proc=os.cpu_count(),
-            desc="Running tokenizer on eval dataset",
-        )
-        tokenized_test_datasets.save_to_disk(tokenized_test_data_path)
-
+    else:
+        while not os.path.exists(tokenized_train_data_path):
+            time.sleep(1)
+        tokenized_train_datasets = load_dataset(tokenized_train_data_path)
+    
     accelerator.wait_for_everyone()
 
-    return tokenized_train_datasets, tokenized_test_datasets
+    return tokenized_train_datasets
