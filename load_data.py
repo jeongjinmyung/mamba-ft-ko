@@ -7,20 +7,22 @@ def preprocess(args, tokenizer, accelerator=None):
     # 데이터셋 경로 설정
     dataset_name = args.dataset_name
     data_path = f"./preprocessed/{dataset_name}/data"
-    tokenized_train_data_path = f"./preprocessed/{dataset_name}/tokenized_train_datasets"
+    tokenized_train_data_path = (
+        f"./preprocessed/{dataset_name}/tokenized_train_datasets"
+    )
 
     # 데이터셋이 이미 존재하면 불러옴
     if os.path.exists(tokenized_train_data_path):
         accelerator.print("Loading preprocessed data")
         tokenized_train_datasets = load_from_disk(tokenized_train_data_path)
-        
+
         return tokenized_train_datasets
 
     # hub에서 데이터셋 다운로드. dict 형태로 불러와짐
     if accelerator.is_local_main_process:
         accelerator.print(f"Loading dataset: {dataset_name}")
         raw_datasets = load_dataset(dataset_name)
-        
+
         raw_datasets.save_to_disk(data_path)
         accelerator.print("Dataset downloaded and saved.")
     else:
@@ -37,16 +39,14 @@ def preprocess(args, tokenizer, accelerator=None):
             truncation=True,
             padding=False,
             max_length=args.context_len,
-        ) 
-        return {
-            "input_ids": tokenized_example["input_ids"]
-        }
+        )
+        return {"input_ids": tokenized_example["input_ids"]}
 
     if accelerator.is_local_main_process:
-        tokenized_train_datasets = raw_datasets['train'].map(
+        tokenized_train_datasets = raw_datasets["train"].map(
             tokenize_function,
             batched=True,
-            remove_columns=raw_datasets['train'].column_names,
+            remove_columns=raw_datasets["train"].column_names,
             num_proc=os.cpu_count(),
             desc="Running tokenizer on train dataset",
         )
@@ -55,7 +55,7 @@ def preprocess(args, tokenizer, accelerator=None):
         while not os.path.exists(tokenized_train_data_path):
             time.sleep(1)
         tokenized_train_datasets = load_dataset(tokenized_train_data_path)
-    
+
     accelerator.wait_for_everyone()
 
     return tokenized_train_datasets
