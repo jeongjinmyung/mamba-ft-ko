@@ -2,9 +2,6 @@
 
 Mamba 모델 한국어 파인튜닝 스크립트
 
-### Data
-`HAERAE-HUB/KOREAN-WEBTEXT` 데이터셋 사용
-
 ### Model
 `state-spaces/mamba-130m-hf` 모델 사용
 
